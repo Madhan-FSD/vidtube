@@ -1,0 +1,10 @@
+paths:
+  /api/v1/healthcheck:
+    get:
+      summary: Health check endpoint
+      description: Returns OK if the API is running.
+      tags:
+        - Health
+      responses:
+        "200":
+          description: API is healthy

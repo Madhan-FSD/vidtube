@@ -1,0 +1,436 @@
+openapi: 3.0.0
+info:
+  title: User Management API
+  version: 1.0.0
+  description: API for user registration, authentication, and profile management.
+
+servers:
+  - url: /api/v1 # All user routes are under this prefix
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: accessToken
+      description: Requires the 'accessToken' cookie (JWT) for authenticated routes.
+    refreshTokenCookie:
+      type: apiKey
+      in: cookie
+      name: refreshToken
+      description: Requires the 'refreshToken' cookie for generating a new access token.
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+          description: HTTP status code
+        data:
+          type: object
+          nullable: true
+          description: Response data payload
+        message:
+          type: string
+          description: A descriptive message
+        success:
+          type: boolean
+          description: Indicates if the request was successful
+    UserResponse:
+      type: object
+      properties:
+        _id:
+          type: string
+        fullname:
+          type: string
+        email:
+          type: string
+        username:
+          type: string
+        avatar:
+          type: string
+          format: url
+        coverImage:
+          type: string
+          format: url
+        isEmailVerified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    LoginUser:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+      required:
+        - email
+        - password
+    ChangePassword:
+      type: object
+      properties:
+        oldPassword:
+          type: string
+          format: password
+        newPassword:
+          type: string
+          format: password
+      required:
+        - oldPassword
+        - newPassword
+    UpdateDetails:
+      type: object
+      properties:
+        fullname:
+          type: string
+          description: New full name of the user.
+      required:
+        - fullname
+    ForgotPassword:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email address to send the password reset link.
+      required:
+        - email
+    ResetPassword:
+      type: object
+      properties:
+        newPassword:
+          type: string
+          format: password
+          description: The new password for the user.
+      required:
+        - newPassword
+
+paths:
+  /users/register:
+    post:
+      summary: 1. Register a new user
+      tags:
+        - User - Public
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                fullname:
+                  type: string
+                email:
+                  type: string
+                username:
+                  type: string
+                password:
+                  type: string
+                avatar:
+                  type: string
+                  format: binary
+                  description: User's profile picture file (required, max 1)
+                coverImage:
+                  type: string
+                  format: binary
+                  description: User's cover image file (optional, max 1)
+      responses:
+        "201":
+          description: User registered successfully. Email verification link sent.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/UserResponse"
+        "400":
+          description: Validation error or User with email / username already exists
+        "500":
+          description: Server error
+
+  /users/login:
+    post:
+      summary: 2. Log in a user
+      tags:
+        - User - Public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginUser"
+      responses:
+        "200":
+          description: User logged in successfully. **Sets access/refresh tokens in HttpOnly cookies.**
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/UserResponse"
+        "400":
+          description: Invalid credentials or User not found
+
+  /users/verify-email/{verificationToken}:
+    post:
+      summary: 3. Verify user's email address
+      tags:
+        - User - Public
+      parameters:
+        - in: path
+          name: verificationToken
+          required: true
+          schema:
+            type: string
+          description: The email verification token sent to the user's email.
+      responses:
+        "200":
+          description: Email verified successfully
+        "401":
+          description: Token is invalid or expired
+        "404":
+          description: User not found
+
+  /users/forgot-password:
+    post:
+      summary: 4. Request a password reset email
+      tags:
+        - User - Public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPassword"
+      responses:
+        "200":
+          description: Password reset email has been sent
+        "404":
+          description: User does not exist
+
+  /users/reset-password/{resetToken}:
+    post:
+      summary: 5. Reset forgotten password
+      tags:
+        - User - Public
+      parameters:
+        - in: path
+          name: resetToken
+          required: true
+          schema:
+            type: string
+          description: The password reset token from the email link.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPassword"
+      responses:
+        "200":
+          description: Password reset successfully
+        "480":
+          description: Token is invalid or expired
+
+  /users/refresh-token:
+    post:
+      summary: 6. Refresh the access token
+      tags:
+        - User - Public
+      security:
+        - refreshTokenCookie: []
+      description: Uses the **refreshToken** cookie to issue a new **accessToken** and a new **refreshToken**.
+      responses:
+        "200":
+          description: Access token refreshed successfully. **Sets new tokens in HttpOnly cookies.**
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: accessToken=...; HttpOnly; Secure, refreshToken=...; HttpOnly; Secure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "401":
+          description: Refresh token is missing, invalid, or expired
+
+  /users/logout:
+    post:
+      summary: 7. Log out the current user
+      tags:
+        - User - Secured
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: User logged out successfully. **Clears access/refresh tokens cookies.**
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiResponse"
+        "401":
+          description: Unauthorized, missing or invalid JWT
+
+  /users/change-password:
+    post:
+      summary: 8. Change the current user's password
+      tags:
+        - User - Secured
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePassword"
+      responses:
+        "200":
+          description: Password changed successfully
+        "400":
+          description: Old password incorrect or new password is the same
+        "401":
+          description: Unauthorized
+
+  /users/update-details:
+    put:
+      summary: 9. Update user's full name
+      tags:
+        - User - Secured
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDetails"
+      responses:
+        "200":
+          description: User details updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/UserResponse"
+        "401":
+          description: Unauthorized
+
+  /users/current-user-details:
+    get:
+      summary: 10. Get current logged-in user details
+      tags:
+        - User - Secured
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Current user details retrieved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/UserResponse"
+        "401":
+          description: Unauthorized
+
+  /users/update-avatar:
+    put:
+      summary: 11. Update user's avatar
+      tags:
+        - User - Secured
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+                  description: New avatar file (max 1)
+              required:
+                - avatar
+      responses:
+        "200":
+          description: Avatar updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/UserResponse"
+        "401":
+          description: Unauthorized
+
+  /users/update-cover-image:
+    put:
+      summary: 12. Update user's cover image
+      tags:
+        - User - Secured
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                coverImage:
+                  type: string
+                  format: binary
+                  description: New cover image file (max 1)
+              required:
+                - coverImage
+      responses:
+        "200":
+          description: Cover image updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - properties:
+                      data:
+                        $ref: "#/components/schemas/UserResponse"
+        "401":
+          description: Unauthorized
+
+  /users/resend-email-verification:
+    post:
+      summary: (Extra) Resend email verification link
+      tags:
+        - User - Secured
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Email has been sent to your email Id
+        "401":
+          description: Unauthorized
+        "409":
+          description: Email is already verified
