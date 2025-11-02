@@ -2,7 +2,7 @@ import Mailgen from "mailgen";
 import axios from "axios";
 import dotenv from "dotenv";
 
-dotenv.config({ path: "../.env" });
+dotenv.config();
 
 const getZohoAccessToken = async () => {
   try {
@@ -50,7 +50,7 @@ const sendEmail = async (options) => {
       toAddress: options.email,
       subject: options.subject,
       content: emailHtml,
-      contentType: "html",
+      mailFormat: "html",
     };
 
     const response = await axios.post(url, mailData, {
