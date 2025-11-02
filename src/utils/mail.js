@@ -43,11 +43,11 @@ const sendEmail = async (options) => {
 
     const accessToken = await getZohoAccessToken();
 
-    const url = `${process.env.ZOHO_API_DOMAIN}/mail/v1/accounts/${process.env.ZOHO_ACCOUNT_ID}/messages`;
+    const url = `${process.env.ZOHO_API_DOMAIN}/accounts/${process.env.ZOHO_ACCOUNT_ID}/messages`;
 
     const mailData = {
       fromAddress: process.env.ZOHO_FROM_EMAIL,
-      toAddress: "gmadhan99@gmail.com",
+      toAddress: options.email,
       subject: options.subject,
       content: emailHtml,
       contentType: "html",
@@ -64,7 +64,7 @@ const sendEmail = async (options) => {
     console.log(`Email successfully sent to ${options.email}`);
     return response.data;
   } catch (error) {
-    console.error("❌ Email service failed:");
+    console.error("Email service failed:");
     console.error(error.response?.data || error.message);
   }
 };
