@@ -1,7 +1,7 @@
 import { app } from "./app.js";
 import dotenv from "dotenv";
 import connectDB from "./db/index.js";
-import https from "https"; // add this for ping
+import https from "https";
 
 dotenv.config({
   path: "./.env",
@@ -16,7 +16,7 @@ function pingHealthcheck() {
     .on("error", (err) =>
       console.error("Healthcheck ping failed:", err.message)
     );
-  console.log("✅ Healthcheck ping sent at", new Date().toISOString());
+  console.log("Healthcheck ping sent at", new Date().toISOString());
 }
 
 connectDB()

@@ -282,7 +282,7 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 
 const updateUserAvatar = asyncHandler(async (req, res) => {
   const avatarLocalPath = req.files?.avatar[0]?.path;
-  console.log(req.files);
+
   if (!avatarLocalPath) {
     throw new ApiError(400, "Avatar file is required");
   }

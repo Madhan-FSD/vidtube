@@ -1,19 +1,33 @@
 import Mailgen from "mailgen";
-import nodemailer from "nodemailer";
+import axios from "axios";
 import dotenv from "dotenv";
 
 dotenv.config({ path: "../.env" });
 
-/**
- * Sends an email using Nodemailer + Mailgen (Mailtrap test env recommended)
- * @param {Object} options
- * @param {string} options.email - Recipient email address
- * @param {string} options.subject - Subject line
- * @param {Object} options.mailgenContent - Mailgen content object
- */
+const getZohoAccessToken = async () => {
+  try {
+    const response = await axios.post(
+      "https://accounts.zoho.in/oauth/v2/token",
+      new URLSearchParams({
+        refresh_token: process.env.ZOHO_REFRESH_TOKEN,
+        client_id: process.env.ZOHO_CLIENT_ID,
+        client_secret: process.env.ZOHO_CLIENT_SECRET,
+        grant_type: "refresh_token",
+      }),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    );
+    return response.data.access_token;
+  } catch (error) {
+    console.error(
+      "Failed to refresh Zoho token:",
+      error.response?.data || error.message
+    );
+    throw new Error("Zoho token refresh failed");
+  }
+};
+
 const sendEmail = async (options) => {
   try {
-    // Create mail template generator
     const mailGenerator = new Mailgen({
       theme: "default",
       product: {
@@ -22,49 +36,39 @@ const sendEmail = async (options) => {
       },
     });
 
-    // Generate both text and HTML content
     const emailTextual = mailGenerator.generatePlaintext(
       options.mailgenContent
     );
     const emailHtml = mailGenerator.generate(options.mailgenContent);
 
-    // Create transporter with correct zoho config
-    const transporter = nodemailer.createTransport({
-      host: process.env.ZOHO_MAIL_SMTP_HOST,
-      port: Number(process.env.ZOHO_MAIL_SMTP_PORT), // ensure it's a number
-      secure: true,
-      auth: {
-        user: process.env.ZOHO_MAIL_SMTP_USER,
-        pass: process.env.ZOHO_MAIL_SMTP_PASSWORD,
-      },
-    });
+    const accessToken = await getZohoAccessToken();
 
-    const mailOptions = {
-      from: process.env.ZOHO_MAIL_SMTP_USER,
-      to: options.email,
+    const url = `${process.env.ZOHO_API_DOMAIN}/mail/v1/accounts/${process.env.ZOHO_ACCOUNT_ID}/messages`;
+
+    const mailData = {
+      fromAddress: process.env.ZOHO_FROM_EMAIL,
+      toAddress: "gmadhan99@gmail.com",
       subject: options.subject,
-      text: emailTextual,
-      html: emailHtml,
+      content: emailHtml,
+      contentType: "html",
     };
 
-    // Use sendMail (not sendEmail) and wrap in timeout to prevent hanging
-    const sendPromise = transporter.sendMail(mailOptions);
-    const timeoutPromise = new Promise(
-      (_, reject) =>
-        setTimeout(() => reject(new Error("Email sending timed out")), 8000) // 8s limit
-    );
+    const response = await axios.post(url, mailData, {
+      headers: {
+        Authorization: `Zoho-oauthtoken ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 10000,
+    });
 
-    await Promise.race([sendPromise, timeoutPromise]);
     console.log(`Email successfully sent to ${options.email}`);
+    return response.data;
   } catch (error) {
-    console.error("Email service failed:");
-    console.error(error.message);
+    console.error("❌ Email service failed:");
+    console.error(error.response?.data || error.message);
   }
 };
 
-/**
- * Generates Mailgen content for email verification
- */
 const emailVerificationMailgenContent = (username, verificationUrl) => ({
   body: {
     name: username,
@@ -82,9 +86,6 @@ const emailVerificationMailgenContent = (username, verificationUrl) => ({
   },
 });
 
-/**
- * Generates Mailgen content for forgot password emails
- */
 const forgotPasswordMailgenContent = (username, passwordResetUrl) => ({
   body: {
     name: username,
